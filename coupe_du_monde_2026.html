@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Coupe du Monde 2026 - Gestion des scores</title>
+<style>
+  :root{
+    --red:#e30613; --dark:#1b1b1b; --bg:#f4f4f2; --border:#ddd;
+  }
+  *{box-sizing:border-box;}
+  body{
+    font-family: Arial, Helvetica, sans-serif;
+    background: var(--bg);
+    margin:0; padding:0; color:#222;
+  }
+  header{
+    background: var(--dark);
+    color:white;
+    padding:18px 24px;
+    display:flex; align-items:center; gap:14px;
+  }
+  header h1{
+    font-size:22px; margin:0; letter-spacing:0.5px;
+  }
+  header .logo{
+    background:var(--red); padding:4px 10px; font-weight:bold; border-radius:3px;
+  }
+  .container{ max-width:1300px; margin:0 auto; padding:20px; }
+  .toolbar{
+    display:flex; justify-content:space-between; align-items:center;
+    margin-bottom: 16px; flex-wrap:wrap; gap:10px;
+  }
+  .toolbar button{
+    background:var(--red); color:white; border:none; padding:8px 14px;
+    border-radius:4px; cursor:pointer; font-size:13px;
+  }
+  .toolbar button.secondary{ background:#555; }
+  .groups-grid{
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px,1fr));
+    gap:18px;
+  }
+  .group-card{
+    background:white; border:1px solid var(--border); border-radius:6px;
+    overflow:hidden;
+  }
+  .group-header{
+    background:var(--dark); color:white; padding:8px 12px; font-weight:bold;
+    font-size:14px;
+  }
+  table.standings{
+    width:100%; border-collapse:collapse; font-size:12.5px;
+  }
+  table.standings th, table.standings td{
+    padding:5px 6px; border-bottom:1px solid #eee; text-align:center;
+  }
+  table.standings th{ background:#fafafa; font-size:11px; color:#666; }
+  table.standings td.team{ text-align:left; font-weight:500; }
+  table.standings tr.qualified{ background:#dff0d8; }
+  .matches{ padding:10px 12px; }
+  .match-row{
+    display:flex; align-items:center; gap:6px; padding:5px 0;
+    border-bottom:1px dashed #eee; font-size:12.5px;
+  }
+  .match-row:last-child{border-bottom:none;}
+  .match-date{ width:90px; color:#777; font-size:11px; flex-shrink:0; }
+  .match-team{ flex:1; text-align:right; }
+  .match-team.away{ text-align:left; }
+  .score-input{
+    width:30px; text-align:center; border:1px solid #ccc; border-radius:3px;
+    padding:3px 0; font-size:12.5px;
+  }
+  .vs{ color:#999; font-size:11px; }
+  .status-pill{
+    font-size:10px; padding:1px 6px; border-radius:8px; margin-left:4px;
+    background:#eee; color:#777;
+  }
+  .status-pill.done{ background:#dff0d8; color:#3c763d; }
+  footer{ text-align:center; padding:20px; color:#999; font-size:12px; }
+  .save-indicator{
+    font-size:11px; color:#3c763d; opacity:0; transition:opacity .3s;
+  }
+  .save-indicator.show{ opacity:1; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="logo">CDM</span>
+  <h1>Coupe du Monde 2026 — Gestion des scores &amp; classements</h1>
+</header>
+
+<div class="container">
+  <div class="toolbar">
+    <div>
+      <button id="resetBtn" class="secondary">Réinitialiser tous les scores</button>
+      <button id="exportBtn" class="secondary">Exporter (JSON)</button>
+      <button id="importBtn" class="secondary">Importer (JSON)</button>
+      <input type="file" id="importFile" accept=".json" style="display:none">
+    </div>
+    <span class="save-indicator" id="saveIndicator">✓ Sauvegardé</span>
+  </div>
+
+  <div class="groups-grid" id="groupsGrid"></div>
+</div>
+
+<footer>Les données sont enregistrées automatiquement dans votre navigateur (localStorage) — elles ne disparaissent pas au rafraîchissement de la page.</footer>
+
+<script>
+/* ---------------------------------------------------------
+   DONNEES : groupes, équipes et calendrier (depuis l'image)
+--------------------------------------------------------- */
+const GROUPS = {
+  A: { teams:["Mexique","Afrique du Sud","Corée du Sud","République tchèque"],
+       matches:[
+        ["11 juin","Mexique","Afrique du Sud"],
+        ["12 juin","Corée du Sud","République tchèque"],
+        ["18 juin","Mexique","Corée du Sud"],
+        ["18 juin","Afrique du Sud","République tchèque"],
+        ["24/25 juin","Mexique","République tchèque"],
+        ["24/25 juin","Afrique du Sud","Corée du Sud"],
+       ]},
+  B: { teams:["Canada","Bosnie-Herzégovine","Qatar","Suisse"],
+       matches:[
+        ["12 juin","Canada","Bosnie-Herzégovine"],
+        ["13 juin","Qatar","Suisse"],
+        ["18 juin","Canada","Qatar"],
+        ["19 juin","Bosnie-Herzégovine","Suisse"],
+        ["24 juin","Suisse","Canada"],
+        ["24 juin","Bosnie-Herzégovine","Qatar"],
+       ]},
+  C: { teams:["Brésil","Maroc","Haïti","Écosse"],
+       matches:[
+        ["14 juin","Brésil","Maroc"],
+        ["14 juin","Haïti","Écosse"],
+        ["20 juin","Brésil","Haïti"],
+        ["20 juin","Maroc","Écosse"],
+        ["25 juin","Écosse","Brésil"],
+        ["25 juin","Maroc","Haïti"],
+       ]},
+  D: { teams:["États-Unis","Paraguay","Australie","Turquie"],
+       matches:[
+        ["13 juin","États-Unis","Paraguay"],
+        ["14 juin","Australie","Turquie"],
+        ["19 juin","États-Unis","Australie"],
+        ["20 juin","Paraguay","Turquie"],
+        ["26 juin","Turquie","États-Unis"],
+        ["26 juin","Paraguay","Australie"],
+       ]},
+  E: { teams:["Allemagne","Curaçao","Côte d'Ivoire","Équateur"],
+       matches:[
+        ["14 juin","Allemagne","Curaçao"],
+        ["15 juin","Côte d'Ivoire","Équateur"],
+        ["20 juin","Allemagne","Côte d'Ivoire"],
+        ["21 juin","Curaçao","Équateur"],
+        ["25 juin","Équateur","Allemagne"],
+        ["25 juin","Curaçao","Côte d'Ivoire"],
+       ]},
+  F: { teams:["Pays-Bas","Japon","Suède","Tunisie"],
+       matches:[
+        ["14 juin","Pays-Bas","Japon"],
+        ["15 juin","Suède","Tunisie"],
+        ["20 juin","Pays-Bas","Suède"],
+        ["21 juin","Japon","Tunisie"],
+        ["26 juin","Tunisie","Pays-Bas"],
+        ["26 juin","Japon","Suède"],
+       ]},
+  G: { teams:["Belgique","Égypte","Iran","Nouvelle-Zélande"],
+       matches:[
+        ["15 juin","Belgique","Égypte"],
+        ["16 juin","Iran","Nouvelle-Zélande"],
+        ["21 juin","Belgique","Iran"],
+        ["22 juin","Égypte","Nouvelle-Zélande"],
+        ["27 juin","Nouvelle-Zélande","Belgique"],
+        ["27 juin","Égypte","Iran"],
+       ]},
+  H: { teams:["Espagne","Cap-Vert","Arabie Saoudite","Uruguay"],
+       matches:[
+        ["15 juin","Espagne","Cap-Vert"],
+        ["16 juin","Arabie Saoudite","Uruguay"],
+        ["21 juin","Espagne","Arabie Saoudite"],
+        ["22 juin","Cap-Vert","Uruguay"],
+        ["27 juin","Uruguay","Espagne"],
+        ["27 juin","Cap-Vert","Arabie Saoudite"],
+       ]},
+  I: { teams:["France","Sénégal","Irak","Norvège"],
+       matches:[
+        ["16 juin","France","Sénégal"],
+        ["17 juin","Irak","Norvège"],
+        ["22 juin","France","Irak"],
+        ["23 juin","Sénégal","Norvège"],
+        ["26 juin","Norvège","France"],
+        ["26 juin","Sénégal","Irak"],
+       ]},
+  J: { teams:["Argentine","Algérie","Autriche","Jordanie"],
+       matches:[
+        ["17 juin","Argentine","Algérie"],
+        ["17 juin","Autriche","Jordanie"],
+        ["22 juin","Argentine","Autriche"],
+        ["23 juin","Algérie","Jordanie"],
+        ["28 juin","Jordanie","Argentine"],
+        ["28 juin","Algérie","Autriche"],
+       ]},
+  K: { teams:["Portugal","RD Congo","Ouzbékistan","Colombie"],
+       matches:[
+        ["17 juin","Portugal","RD Congo"],
+        ["18 juin","Ouzbékistan","Colombie"],
+        ["23 juin","Portugal","Ouzbékistan"],
+        ["24 juin","RD Congo","Colombie"],
+        ["28 juin","Colombie","Portugal"],
+        ["28 juin","RD Congo","Ouzbékistan"],
+       ]},
+  L: { teams:["Angleterre","Croatie","Ghana","Panama"],
+       matches:[
+        ["17 juin","Angleterre","Croatie"],
+        ["18 juin","Ghana","Panama"],
+        ["23 juin","Angleterre","Ghana"],
+        ["24 juin","Croatie","Panama"],
+        ["27 juin","Panama","Angleterre"],
+        ["27 juin","Croatie","Ghana"],
+       ]},
+};
+
+const STORAGE_KEY = "cdm2026_scores";
+
+/* ---------------------------------------------------------
+   PERSISTANCE (localStorage)
+--------------------------------------------------------- */
+function loadScores(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  }catch(e){ return {}; }
+}
+function saveScores(scores){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(scores));
+  flashSaved();
+}
+let scores = loadScores(); // { "A-0": {home:2, away:1}, ... }
+
+function flashSaved(){
+  const el = document.getElementById('saveIndicator');
+  el.classList.add('show');
+  clearTimeout(flashSaved._t);
+  flashSaved._t = setTimeout(()=> el.classList.remove('show'), 1200);
+}
+
+/* ---------------------------------------------------------
+   CALCUL DU CLASSEMENT
+--------------------------------------------------------- */
+function computeStandings(groupKey){
+  const group = GROUPS[groupKey];
+  const stats = {};
+  group.teams.forEach(t => stats[t] = {team:t, j:0, g:0, n:0, p:0, bp:0, bc:0, diff:0, pts:0});
+
+  group.matches.forEach((m, idx) => {
+    const key = `${groupKey}-${idx}`;
+    const s = scores[key];
+    if(!s || s.home === "" || s.away === "" || s.home===null || s.away===null) return;
+    const home = parseInt(s.home), away = parseInt(s.away);
+    if(isNaN(home) || isNaN(away)) return;
+    const [, t1, t2] = m;
+    stats[t1].j++; stats[t2].j++;
+    stats[t1].bp += home; stats[t1].bc += away;
+    stats[t2].bp += away; stats[t2].bc += home;
+    if(home > away){ stats[t1].g++; stats[t1].pts+=3; stats[t2].p++; }
+    else if(home < away){ stats[t2].g++; stats[t2].pts+=3; stats[t1].p++; }
+    else { stats[t1].n++; stats[t2].n++; stats[t1].pts+=1; stats[t2].pts+=1; }
+  });
+
+  const list = Object.values(stats).map(s => { s.diff = s.bp - s.bc; return s; });
+  list.sort((a,b)=>{
+    if(b.pts !== a.pts) return b.pts - a.pts;
+    if(b.diff !== a.diff) return b.diff - a.diff;
+    if(b.bp !== a.bp) return b.bp - a.bp;
+    return a.team.localeCompare(b.team);
+  });
+  return list;
+}
+
+/* ---------------------------------------------------------
+   RENDU
+--------------------------------------------------------- */
+function render(){
+  const grid = document.getElementById('groupsGrid');
+  grid.innerHTML = "";
+
+  Object.keys(GROUPS).forEach(key => {
+    const group = GROUPS[key];
+    const card = document.createElement('div');
+    card.className = 'group-card';
+
+    const header = document.createElement('div');
+    header.className = 'group-header';
+    header.textContent = `Groupe ${key}`;
+    card.appendChild(header);
+
+    // tableau classement
+    const standings = computeStandings(key);
+    const table = document.createElement('table');
+    table.className = 'standings';
+    table.innerHTML = `
+      <thead><tr>
+        <th>#</th><th class="team-h">Équipe</th><th>J</th><th>G</th><th>N</th><th>P</th><th>+/-</th><th>Pts</th>
+      </tr></thead>`;
+    const tbody = document.createElement('tbody');
+    standings.forEach((s, i) => {
+      const tr = document.createElement('tr');
+      if(i < 2) tr.classList.add('qualified');
+      tr.innerHTML = `
+        <td>${i+1}</td>
+        <td class="team">${s.team}</td>
+        <td>${s.j}</td><td>${s.g}</td><td>${s.n}</td><td>${s.p}</td>
+        <td>${s.diff > 0 ? '+' + s.diff : s.diff}</td>
+        <td><strong>${s.pts}</strong></td>`;
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    card.appendChild(table);
+
+    // matchs
+    const matchesDiv = document.createElement('div');
+    matchesDiv.className = 'matches';
+    group.matches.forEach((m, idx) => {
+      const [date, t1, t2] = m;
+      const matchKey = `${key}-${idx}`;
+      const saved = scores[matchKey] || {home:"", away:""};
+      const row = document.createElement('div');
+      row.className = 'match-row';
+
+      const isDone = saved.home !== "" && saved.away !== "" && saved.home !== null && saved.away !== null;
+
+      row.innerHTML = `
+        <span class="match-date">${date}</span>
+        <span class="match-team home">${t1}</span>
+        <input type="number" min="0" class="score-input" data-key="${matchKey}" data-side="home" value="${saved.home ?? ''}">
+        <span class="vs">-</span>
+        <input type="number" min="0" class="score-input" data-key="${matchKey}" data-side="away" value="${saved.away ?? ''}">
+        <span class="match-team away">${t2}</span>
+        <span class="status-pill ${isDone ? 'done' : ''}">${isDone ? 'Joué' : 'À venir'}</span>
+      `;
+      matchesDiv.appendChild(row);
+    });
+    card.appendChild(matchesDiv);
+
+    grid.appendChild(card);
+  });
+
+  // attacher les listeners
+  document.querySelectorAll('.score-input').forEach(input => {
+    input.addEventListener('input', onScoreChange);
+  });
+}
+
+function onScoreChange(e){
+  const key = e.target.dataset.key;
+  const side = e.target.dataset.side;
+  const val = e.target.value;
+  if(!scores[key]) scores[key] = {home:"", away:""};
+  scores[key][side] = val === "" ? "" : parseInt(val);
+  saveScores(scores);
+  render(); // recalcule classement + statut "joué"
+}
+
+/* ---------------------------------------------------------
+   BOUTONS TOOLBAR
+--------------------------------------------------------- */
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if(confirm("Voulez-vous vraiment effacer tous les scores enregistrés ?")){
+    scores = {};
+    saveScores(scores);
+    render();
+  }
+});
+
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(scores, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = "scores_cdm2026.json";
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById('importBtn').addEventListener('click', () => {
+  document.getElementById('importFile').click();
+});
+document.getElementById('importFile').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try{
+      const data = JSON.parse(ev.target.result);
+      scores = data;
+      saveScores(scores);
+      render();
+    }catch(err){
+      alert("Fichier invalide.");
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = "";
+});
+
+render();
+</script>
+</body>
+</html>
