@@ -313,25 +313,31 @@ const GROUPS = {
 const STORAGE_KEY = "cdm2026_scores";
 const STORAGE_KEY_KO = "cdm2026_knockout";
 
-/* Definition du tableau "1/16 de finale" (32 équipes), repris du visuel CNews.
-   third: liste des groupes parmi lesquels un 3e qualifié peut occuper ce slot. */
+/* =========================================================
+   #phase de finale
+   ROUND32 — Affrontements du 1/16 de finale
+   Fixés en constante d'après le tableau officiel (image CDM 2026)
+   Ordre : 8 matchs côté gauche (idx 0-7) puis 8 matchs côté droit (idx 8-15)
+========================================================= */
 const ROUND32 = [
-  { top:{type:'rank', group:'E', rank:1}, bottom:{type:'third', groups:['A','B','C','D','F']} },
-  { top:{type:'rank', group:'I', rank:1}, bottom:{type:'third', groups:['C','D','F','G','H']} },
-  { top:{type:'rank', group:'A', rank:2}, bottom:{type:'rank', group:'B', rank:2} },
-  { top:{type:'rank', group:'F', rank:1}, bottom:{type:'rank', group:'C', rank:2} },
-  { top:{type:'rank', group:'K', rank:2}, bottom:{type:'rank', group:'L', rank:2} },
-  { top:{type:'rank', group:'H', rank:1}, bottom:{type:'rank', group:'J', rank:2} },
-  { top:{type:'rank', group:'D', rank:1}, bottom:{type:'third', groups:['B','E','F','I','J']} },
-  { top:{type:'rank', group:'G', rank:1}, bottom:{type:'third', groups:['A','E','H','I','J']} },
-  { top:{type:'rank', group:'C', rank:1}, bottom:{type:'rank', group:'F', rank:2} },
-  { top:{type:'rank', group:'E', rank:2}, bottom:{type:'rank', group:'I', rank:2} },
-  { top:{type:'rank', group:'A', rank:1}, bottom:{type:'third', groups:['C','E','F','H','I']} },
-  { top:{type:'rank', group:'L', rank:1}, bottom:{type:'third', groups:['E','H','I','J','K']} },
-  { top:{type:'rank', group:'B', rank:1}, bottom:{type:'third', groups:['E','F','G','I','J']} },
-  { top:{type:'rank', group:'K', rank:1}, bottom:{type:'third', groups:['D','E','I','J','L']} },
-  { top:{type:'rank', group:'J', rank:1}, bottom:{type:'rank', group:'H', rank:2} },
-  { top:{type:'rank', group:'D', rank:2}, bottom:{type:'rank', group:'G', rank:2} },
+  /* --- Côté GAUCHE --- */
+  /* 0 */ { date:'29 juin 22h30', teamA:'Allemagne',            teamB:'Paraguay' },
+  /* 1 */ { date:'30 juin 23h00', teamA:'France',               teamB:'Suède' },
+  /* 2 */ { date:'28 juin 21h00', teamA:'Afrique du Sud',       teamB:'Canada' },
+  /* 3 */ { date:'30 juin 03h00', teamA:'Pays-Bas',             teamB:'Maroc' },
+  /* 4 */ { date:'03 juil 01h00', teamA:'Portugal',             teamB:'Croatie' },
+  /* 5 */ { date:'02 juil 21h00', teamA:'Espagne',              teamB:'Autriche' },
+  /* 6 */ { date:'02 juil 02h00', teamA:'États-Unis',           teamB:'Bosnie-Herzégovine' },
+  /* 7 */ { date:'01 juil 22h00', teamA:'Belgique',             teamB:'Sénégal' },
+  /* --- Côté DROIT --- */
+  /* 8 */ { date:'29 juin 19h00', teamA:'Brésil',               teamB:'Japon' },
+  /* 9 */ { date:'30 juin 19h00', teamA:'Côte d\'Ivoire',       teamB:'Norvège' },
+  /*10 */ { date:'01 juil 03h00', teamA:'Mexique',              teamB:'Équateur' },
+  /*11 */ { date:'01 juil 18h00', teamA:'Angleterre',           teamB:'RD Congo' },
+  /*12 */ { date:'04 juil 00h00', teamA:'Argentine',            teamB:'Cap-Vert' },
+  /*13 */ { date:'03 juil 20h00', teamA:'Égypte',               teamB:'Australie' },
+  /*14 */ { date:'03 juil 05h00', teamA:'Suisse',               teamB:'Algérie' },
+  /*15 */ { date:'04 juil 03h30', teamA:'Colombie',             teamB:'Ghana' },
 ];
 
 /* ---------------------------------------------------------
@@ -462,32 +468,16 @@ function slotLabel(slot){
   return `3e ${slot.groups.join('/')}`;
 }
 
-// Résout les 16 affrontements du 1/16 de finale (équipe réelle si dispo, sinon placeholder)
+// Les équipes du 1/16 sont fixées en constante — lecture directe
 function buildRound32(){
-  const { assignment } = assignThirdSlots();
-  return ROUND32.map((slot, idx) => {
-    let topName, topReady;
-    if(slot.top.type === 'rank'){
-      const ready = groupComplete(slot.top.group) || true; // on affiche le rang même provisoire
-      const t = resolveRankTeam(slot.top.group, slot.top.rank);
-      topName = t.team; topReady = groupComplete(slot.top.group);
-    }
-    let bottomName, bottomReady;
-    if(slot.bottom.type === 'rank'){
-      const t = resolveRankTeam(slot.bottom.group, slot.bottom.rank);
-      bottomName = t.team; bottomReady = groupComplete(slot.bottom.group);
-    } else {
-      const assigned = assignment[idx];
-      bottomReady = Object.keys(GROUPS).every(g => groupComplete(g)); // fiable seulement si tous les groupes sont finis
-      bottomName = assigned ? assigned.team : null;
-    }
-    return {
-      id: `ro32-${idx}`,
-      teamA: { name: topName, label: slotLabel(slot.top), ready: topReady },
-      teamB: { name: bottomName, label: slotLabel(slot.bottom), ready: bottomReady },
-    };
-  });
+  return ROUND32.map((slot, idx) => ({
+    id: `ro32-${idx}`,
+    date: slot.date,
+    teamA: { name: slot.teamA, label: slot.teamA, ready: true },
+    teamB: { name: slot.teamB, label: slot.teamB, ready: true },
+  }));
 }
+
 
 function getMatchResult(matchId, teamAObj, teamBObj){
   const nameA = teamAObj ? teamAObj.name : null;
@@ -604,6 +594,7 @@ function renderBracketMatch(m){
   }
   return `
     <div class="bracket-match">
+      ${m.date ? `<div style="font-size:9px;color:#999;text-align:center;margin-bottom:2px;">${m.date}</div>` : ''}
       ${teamCellHtml(m.id, 'home', m.teamA, m.winner && m.winner === m.teamA.name)}
       <div class="bracket-divider"></div>
       ${teamCellHtml(m.id, 'away', m.teamB, m.winner && m.winner === m.teamB.name)}
